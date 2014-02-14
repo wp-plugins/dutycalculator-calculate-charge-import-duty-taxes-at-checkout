@@ -16,10 +16,10 @@ This plugin calculates accurate import duty & taxes in the checkout, so you can 
 DutyCalculator API and plugins are used by many brands and retailers that care about their customer experience, such as Christian Louboutin, Selfridges, Threadless, Farfetch and many more.
 
 = Coverage =
-DutyCalculator covers 82 countries and over 500,000 products. 
+DutyCalculator covers [82 countries](http://www.dutycalculator.com/help_center/what-countries-are-covered-by-the-dutycalculator/) and over [500,000 products](http://www.dutycalculator.com/hs-codes-import-duty-tax-rates-restriction/).
 
 = Requirements =
-The plugin requires a DutyCalculator API account (go to http://www.dutycalculator.com/compare-plans/) and is made to work with WooCommerce version 2.0.18 and higher.
+The plugin requires a DutyCalculator [API account](http://www.dutycalculator.com/compare-plans/) and is made to work with WooCommerce version 2.0.18 and higher.
 
 == Installation ==
 The Plugin can be installed directly from the main WordPress Plugin page.
