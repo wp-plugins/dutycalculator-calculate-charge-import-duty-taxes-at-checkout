@@ -31,7 +31,7 @@ The Plugin can be installed directly from the main WordPress Plugin page.
 
 == Frequently Asked Questions ==
 = 1. Are the import duty & tax calculations accurate? =
-Yes, we keep duty & tax rates up to date continuously. Key to accurate calculations is that you classify your products correctly in the Woocommerce Products section
+Yes, we keep duty & tax rates up to date continuously. Key to accurate calculations is that you classify your products correctly in the Woocommerce Products section.
 = 2. Do I need to classify all products? =
 This is not required. In case you have not classified a product DutyCalculator will classify the product automatically based on the product title and description. 
 = 3. What are the HS tariff codes for? =
