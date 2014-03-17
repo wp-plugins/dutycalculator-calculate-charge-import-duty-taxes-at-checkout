@@ -16,7 +16,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.0';
+        public $version = '1.0.1';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
