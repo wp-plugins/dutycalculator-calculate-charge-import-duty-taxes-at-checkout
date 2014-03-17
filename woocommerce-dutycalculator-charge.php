@@ -67,7 +67,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
             add_action('woocommerce_new_order_item', array($this,'get_order_from_new_order_item'), 10, 3);
             add_action('woocommerce_ajax_add_order_item_meta', array($this,'add_order_item_hs_code_meta_ajax'), 10, 2);
             add_filter('woocommerce_product_options_tax', array($this, 'woocommerce_dutycalculator_show_widget')); //dc classification widget
-            add_action('save_post', array($this, 'add_dc_post_meta')); //save dc widget data
+            add_action('save_post_product', array($this, 'add_dc_post_meta')); //save dc widget data
             add_filter('woocommerce_cart_tax_totals', array($this, 'change_taxes_if_failed_calculation'), 1, 2);
             add_filter('woocommerce_order_tax_totals', array($this, 'change_taxes_if_failed_calculation'), 1, 2);
 
@@ -713,6 +713,9 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 
         public function add_dc_post_meta($product_id)
         {
+            /* if ( get_post_type( $post ) == "product" ) { update_post_meta... }
+             or like this add_action( 'save_post_product' ) */
+
             update_post_meta( $product_id, '_dc_duty_category_id', $_POST['dc_duty_category_id'] );
             update_post_meta( $product_id, '_dc_your_product_description', $_POST['dc_your_product_description'] );
             update_post_meta( $product_id, '_dc_classification_request_id', $_POST['dc_classification_request_id'] );

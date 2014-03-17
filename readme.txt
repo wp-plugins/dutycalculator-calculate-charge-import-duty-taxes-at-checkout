@@ -53,6 +53,9 @@ To contact tech support go to http://www.dutycalculator.com/team/. Make sure to 
 
 == Changelog ==
 
+= 1.0.1 =
+* Fixed product meta data update
+
 = 1.0.0 =
 * Initial Release
 
