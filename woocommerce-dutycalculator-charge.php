@@ -3,7 +3,7 @@
 Plugin Name: DutyCalculator: Calculate & charge import duty & taxes at checkout
 Plugin URI: http://www.dutycalculator.com
 Description: Calculate & charge import duty & taxes at checkout to provide your customers with DDP service - requires <a href="http://www.dutycalculator.com">API key</a>
-Version: 1.0.1
+Version: 1.0.2
 Author: DutyCalculator
 Author URI: http://www.dutycalculator.com/team/
 */
@@ -16,7 +16,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.1';
+        public $version = '1.0.2';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
@@ -79,20 +79,29 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         {
             global $woocommerce; /** @var  $woocommerce Woocommerce */
             $rawXml = $woocommerce->session->_dc_cart_calculation_response;
-            $answer = new SimpleXMLElement($rawXml);
+            try
+            {
+                if (stripos($rawXml, '<?xml') === false)
+                {
+                    throw new Exception($rawXml);
+                }
+                $answer = new SimpleXMLElement($rawXml);
 //            $calcAnswerAttributes = $answer->attributes();
 //            $isCalculationFailed = (bool)(string)$calcAnswerAttributes['failed-calculation'];
-            $isCalculationFailed = ($answer->getName() == 'error');
-            if ($isCalculationFailed)
-            {
-                foreach ( $tax_totals as $code => $tax )
+                $isCalculationFailed = ($answer->getName() == 'error');
+                if ($isCalculationFailed)
                 {
-                    if ($tax->label == $this->taxName)
+                    foreach ( $tax_totals as $code => $tax )
                     {
-                        $tax->formatted_amount = $this->failedCalculationCartText;
+                        if ($tax->label == $this->taxName)
+                        {
+                            $tax->formatted_amount = $this->failedCalculationCartText;
+                        }
                     }
                 }
             }
+            catch (Exception $e)
+            {}
             return $tax_totals;
         }
 
@@ -295,27 +304,27 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                     $this->dc_woo_calculation_response_to_order_meta($order_id); // setting new calculation response to order data
                     $this->store_api_request_to_order($order);
 
-                    $answer = new SimpleXMLElement($rawXml);
-                    $isCalculationError = ($answer->getName() == 'error' ? true : false);
-
-                    if ($isCalculationError)
-                    {
-                        $linkToCalculation = '<span style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$answer->message . ' (Error code: ' .(string)$answer->code. ')</span>';
-                    }
-                    else
-                    {
-                        $calcAnswerAttributes = $answer->attributes();
-                        $linkToCalculation = '<a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a>'; //redrawing calculation URL
-                        $this->save_dc_calculation_for_order($order); // save calculation
-                        $this->store_api_request_to_order($order);
-                    }
-
                     try
                     {
                         if (stripos($rawXml, '<?xml') === false)
                         {
                             throw new Exception($rawXml);
                         }
+                        $answer = new SimpleXMLElement($rawXml);
+                        $isCalculationError = ($answer->getName() == 'error' ? true : false);
+
+                        if ($isCalculationError)
+                        {
+                            $linkToCalculation = '<span style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$answer->message . ' (Error code: ' .(string)$answer->code. ')</span>';
+                        }
+                        else
+                        {
+                            $calcAnswerAttributes = $answer->attributes();
+                            $linkToCalculation = '<a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a>'; //redrawing calculation URL
+                            $this->save_dc_calculation_for_order($order); // save calculation
+                            $this->store_api_request_to_order($order);
+                        }
+
                         $responseItems = $answer->xpath('item');
                         foreach ($responseItems as $responseItem)
                         {
@@ -566,34 +575,48 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 
         public function dc_woo_order_section_add_link_to_calculation_after_shipping_address($order)
         {
-            if(current($order->order_custom_fields['_dc_calculation_response']))
+            try
             {
-                $calcAnswer = new SimpleXMLElement(current($order->order_custom_fields['_dc_calculation_response']));
-                $calcAnswerAttributes = $calcAnswer->attributes();
-                $isCalculationFailed = ($calcAnswer->getName() == 'error');
-                if (!$isCalculationFailed)
+                if (stripos($rawXml, '<?xml') === false)
                 {
-                    echo '<p id="link_to_calculation"><a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a></p>';
+                    throw new Exception($rawXml);
                 }
-                else
+                if(current($order->order_custom_fields['_dc_calculation_response']))
                 {
-                    echo '<p id="link_to_calculation" style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$calcAnswer->message . ' (Error code: ' .(string)$calcAnswer->code. ')</p>';
+                    $calcAnswer = new SimpleXMLElement(current($order->order_custom_fields['_dc_calculation_response']));
+                    $calcAnswerAttributes = $calcAnswer->attributes();
+                    $isCalculationFailed = ($calcAnswer->getName() == 'error');
+                    if (!$isCalculationFailed)
+                    {
+                        echo '<p id="link_to_calculation"><a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a></p>';
+                    }
+                    else
+                    {
+                        echo '<p id="link_to_calculation" style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$calcAnswer->message . ' (Error code: ' .(string)$calcAnswer->code. ')</p>';
+                    }
                 }
             }
+            catch (Exception $e)
+            {}
         }
 
         public function save_dc_calculation_for_order(WC_Order $order)
         {
-            if (current($order->order_custom_fields['_dc_calculation_response']))
+            try
             {
-                $calcAnswer = new SimpleXMLElement(current($order->order_custom_fields['_dc_calculation_response']));
+                $rawXml = current($order->order_custom_fields['_dc_calculation_response']);
+                if (stripos($rawXml, '<?xml') === false)
+                {
+                    throw new Exception($rawXml);
+                }
+                $calcAnswer = new SimpleXMLElement($rawXml);
                 $calcAnswerAttributes = $calcAnswer->attributes();
                 $params = array('calculation_id' => $calcAnswerAttributes['id'], 'order_id' => $order->id,
                     'order_type' => 'order',
                     'shipment_id' => $order->shipping_method);
                 return $this->api->send_request_and_get_response($this->api->actionStoreCalculation, $params);
             }
-            else
+            catch (Exception $e)
             {
                 return false;
             }

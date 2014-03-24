@@ -3,7 +3,7 @@ Contributors: DutyCalculator
 Tags:  import duty, DDP shipping, landed cost, import tax, duty calculator, international shipping, charge import duty, checkout
 Requires at least: 3.3
 Tested up to: 3.7
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -52,6 +52,9 @@ To contact tech support go to http://www.dutycalculator.com/team/. Make sure to 
 6. Backend: Extension provisioning
 
 == Changelog ==
+
+= 1.0.2 =
+* Response SimpleXML bugfix
 
 = 1.0.1 =
 * Fixed product meta data update
