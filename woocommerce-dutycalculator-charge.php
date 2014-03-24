@@ -550,10 +550,10 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
             }
             else
             {   // unsetting all 'Import Duty & Taxes' taxes
-                $ratesToUnset = $wpdb->get_results( $wpdb->prepare(
+                $ratesToUnset = $wpdb->get_results(
                     "SELECT * FROM {$wpdb->prefix}woocommerce_tax_rates
                             WHERE tax_rate_name = '" . $this->taxName . "'
-                            ORDER BY tax_rate_order	"));
+                            ORDER BY tax_rate_order	");
                 foreach ($ratesToUnset as $rate)
                 {
                     unset ($cart->taxes[$rate->tax_rate_id]);
@@ -577,23 +577,21 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         {
             try
             {
+                $rawXml = current($order->order_custom_fields['_dc_calculation_response']);
                 if (stripos($rawXml, '<?xml') === false)
                 {
                     throw new Exception($rawXml);
                 }
-                if(current($order->order_custom_fields['_dc_calculation_response']))
+                $calcAnswer = new SimpleXMLElement($rawXml);
+                $calcAnswerAttributes = $calcAnswer->attributes();
+                $isCalculationFailed = ($calcAnswer->getName() == 'error');
+                if (!$isCalculationFailed)
                 {
-                    $calcAnswer = new SimpleXMLElement(current($order->order_custom_fields['_dc_calculation_response']));
-                    $calcAnswerAttributes = $calcAnswer->attributes();
-                    $isCalculationFailed = ($calcAnswer->getName() == 'error');
-                    if (!$isCalculationFailed)
-                    {
-                        echo '<p id="link_to_calculation"><a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a></p>';
-                    }
-                    else
-                    {
-                        echo '<p id="link_to_calculation" style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$calcAnswer->message . ' (Error code: ' .(string)$calcAnswer->code. ')</p>';
-                    }
+                    echo '<p id="link_to_calculation"><a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'].'/">Import duty & tax calculation</a></p>';
+                }
+                else
+                {
+                    echo '<p id="link_to_calculation" style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$calcAnswer->message . ' (Error code: ' .(string)$calcAnswer->code. ')</p>';
                 }
             }
             catch (Exception $e)
@@ -751,11 +749,11 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         public function get_dc_tax_by_class($taxClass)
         { // not includes DC countries
             global $wpdb;
-            $rates = $wpdb->get_results( $wpdb->prepare(
+            $rates = $wpdb->get_results(
                 "SELECT * FROM {$wpdb->prefix}woocommerce_tax_rates
                             WHERE tax_rate_name = '" . $this->taxName . "'
                             AND tax_rate_class = '" . $taxClass . "'
-                            ORDER BY tax_rate_order	"));
+                            ORDER BY tax_rate_order	");
             return array_shift(array_values($rates));
         }
 

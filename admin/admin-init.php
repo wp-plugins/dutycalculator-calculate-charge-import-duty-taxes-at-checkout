@@ -24,10 +24,10 @@ function dc_woo_admin_warnings()
         {
             $warnings['no_api_key'] = 'Insert API key and set destination countries for which you want to activate DutyCalculator <a href="' . admin_url( 'admin.php?page=' . $woocommerce_dutycalculator_charge->configPageName ) . '">here</a>.';
         }
-        $rates = $wpdb->get_results( $wpdb->prepare(
+        $rates = $wpdb->get_results(
             "SELECT * FROM {$wpdb->prefix}woocommerce_tax_rates
 					WHERE tax_rate_name = '" . $woocommerce_dutycalculator_charge->taxName . "'
-					ORDER BY tax_rate_order	"));
+					ORDER BY tax_rate_order	");
         if (!count($rates))
         {
             $warnings['no_dc_tax_rates'] = 'Insert DutyCalculator row to at least one of the tax rate classes <a href="' . admin_url( 'admin.php?page=woocommerce_settings&tab=tax&section=standard' ) . '">here</a>.';
