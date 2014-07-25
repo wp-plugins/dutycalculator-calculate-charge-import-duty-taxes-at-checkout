@@ -3,7 +3,7 @@
 Plugin Name: DutyCalculator: Calculate & charge import duty & taxes at checkout
 Plugin URI: http://www.dutycalculator.com
 Description: Calculate & charge import duty & taxes at checkout to provide your customers with DDP service - requires <a href="http://www.dutycalculator.com">API key</a>
-Version: 1.0.2
+Version: 1.0.3
 Author: DutyCalculator
 Author URI: http://www.dutycalculator.com/team/
 */
@@ -16,7 +16,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.2';
+        public $version = '1.0.3';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
@@ -157,24 +157,21 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 
         public function dc_woo_calc_line_taxes_ajax_response()
         {
-            global $woocommerce, $wpdb;
+            global $wpdb;
 
             check_ajax_referer( 'calc-totals', 'security' );
 
             header( 'Content-Type: application/json; charset=utf-8' );
 
             $tax = new WC_Tax();
-
             $taxes = $tax_rows = $item_taxes = $shipping_taxes = array();
-
             $order_id 		= absint( $_POST['order_id'] );
             $order          = new WC_Order( $order_id );
             $country 		= strtoupper( esc_attr( $_POST['country'] ) );
             $state 			= strtoupper( esc_attr( $_POST['state'] ) );
             $postcode 		= strtoupper( esc_attr( $_POST['postcode'] ) );
             $city 			= sanitize_title( esc_attr( $_POST['city'] ) );
-
-            $items			= $_POST['items'];
+            $items          = isset( $_POST['items'] ) ? $_POST['items'] : array();
             $shipping		= $_POST['shipping'];
             $item_tax		= 0;
 
@@ -245,8 +242,8 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                             $line_tax = 0;
 
                         $item_taxes[ $item_id ] = array(
-                            'line_subtotal_tax' => $line_subtotal_tax,
-                            'line_tax' 			=> $line_tax
+                            'line_subtotal_tax' => wc_format_localized_price( $line_subtotal_tax ),
+                            'line_tax'          => wc_format_localized_price( $line_tax )
                         );
 
                         $item_tax += $line_tax;
@@ -360,13 +357,16 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                 'tax_class' => ''
             ) );
 
-            if ( $tax_rates )
-                foreach ( $tax_rates as $key => $rate )
-                    if ( isset( $rate['shipping'] ) && $rate['shipping'] == 'yes' )
+            if ( $tax_rates ) {
+                foreach ( $tax_rates as $key => $rate ) {
+                    if ( isset( $rate['shipping'] ) && 'yes' == $rate['shipping'] ) {
                         $matched_tax_rates[ $key ] = $rate;
+                    }
+                }
+            }
 
             $shipping_taxes = $tax->calc_shipping_tax( $shipping, $matched_tax_rates );
-            $shipping_tax = $tax->round( array_sum( $shipping_taxes ) );
+            $shipping_tax   = $tax->round( array_sum( $shipping_taxes ) );
 
             // Remove old tax rows
             $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}woocommerce_order_itemmeta WHERE order_item_id IN ( SELECT order_item_id FROM {$wpdb->prefix}woocommerce_order_items WHERE order_id = %d AND order_item_type = 'tax' )", $order_id ) );
@@ -394,42 +394,44 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 
             foreach ( array_keys( $taxes + $shipping_taxes ) as $key ) {
 
-                $item 							= array();
-                $item['rate_id']			 	= $key;
-                $item['name'] 					= $tax_codes[ $key ];
-                $item['label'] 					= $tax->get_rate_label( $key );
-                $item['compound'] 				= $tax->is_compound( $key ) ? 1 : 0;
-                $item['tax_amount'] 			= $tax->round( isset( $taxes[ $key ] ) ? $taxes[ $key ] : 0 );
-                $item['shipping_tax_amount'] 	= $tax->round( isset( $shipping_taxes[ $key ] ) ? $shipping_taxes[ $key ] : 0 );
+                $item                        = array();
+                $item['rate_id']             = $key;
+                $item['name']                = $tax_codes[ $key ];
+                $item['label']               = $tax->get_rate_label( $key );
+                $item['compound']            = $tax->is_compound( $key ) ? 1 : 0;
+                $item['tax_amount']          = wc_format_decimal( isset( $taxes[ $key ] ) ? $taxes[ $key ] : 0 );
+                $item['shipping_tax_amount'] = wc_format_decimal( isset( $shipping_taxes[ $key ] ) ? $shipping_taxes[ $key ] : 0 );
 
-                if ( ! $item['label'] )
-                    $item['label'] = $woocommerce->countries->tax_or_vat();
+                if ( ! $item['label'] ) {
+                    $item['label'] = WC()->countries->tax_or_vat();
+                }
 
                 // Add line item
-                $item_id = woocommerce_add_order_item( $order_id, array(
-                    'order_item_name' 		=> $item['name'],
-                    'order_item_type' 		=> 'tax'
+                $item_id = wc_add_order_item( $order_id, array(
+                    'order_item_name' => $item['name'],
+                    'order_item_type' => 'tax'
                 ) );
 
                 // Add line item meta
                 if ( $item_id ) {
-                    woocommerce_add_order_item_meta( $item_id, 'rate_id', $item['rate_id'] );
-                    woocommerce_add_order_item_meta( $item_id, 'label', $item['label'] );
-                    woocommerce_add_order_item_meta( $item_id, 'compound', $item['compound'] );
-                    woocommerce_add_order_item_meta( $item_id, 'tax_amount', $item['tax_amount'] );
-                    woocommerce_add_order_item_meta( $item_id, 'shipping_tax_amount', $item['shipping_tax_amount'] );
+                    wc_add_order_item_meta( $item_id, 'rate_id', $item['rate_id'] );
+                    wc_add_order_item_meta( $item_id, 'label', $item['label'] );
+                    wc_add_order_item_meta( $item_id, 'compound', $item['compound'] );
+                    wc_add_order_item_meta( $item_id, 'tax_amount', $item['tax_amount'] );
+                    wc_add_order_item_meta( $item_id, 'shipping_tax_amount', $item['shipping_tax_amount'] );
                 }
-                include( $woocommerce->plugin_path . '/admin/post-types/writepanels/order-tax-html.php' );
+
+                include( WC()->plugin_path() . '/includes/admin/post-types/meta-boxes/views/html-order-tax.php' );
             }
 
             $tax_row_html = ob_get_clean();
 
             // Return
             echo json_encode( array(
-                'item_tax' 		=> $item_tax,
-                'item_taxes' 	=> $item_taxes,
-                'shipping_tax' 	=> $shipping_tax,
-                'tax_row_html' 	=> $tax_row_html,
+                'item_tax'     => $item_tax,
+                'item_taxes'   => $item_taxes,
+                'shipping_tax' => $shipping_tax,
+                'tax_row_html' => $tax_row_html,
                 'link_to_calculation' => $linkToCalculation
             ) );
 
@@ -564,8 +566,17 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 
         public function dutycalculator_woocommerce_calc_line_taxes_ajax_request()
         {
-            wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
-            wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
+            global $woocommerce;
+            if ( version_compare( $woocommerce->version, '2.0.20', '<' ) && null !== $woocommerce->version )
+            {
+                wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section_till_wc_209.js', array('jquery'), $this->version);
+                wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section_till_wc_209.js', array('jquery'), $this->version);
+            }
+            else
+            {
+                wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
+                wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
+            }
         }
 
         public function dc_woo_calculation_response_to_order_meta($orderId, $posted = false)
@@ -577,7 +588,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         {
             try
             {
-                $rawXml = current($order->order_custom_fields['_dc_calculation_response']);
+                $rawXml = get_post_meta($order->id, '_dc_calculation_response', true);
                 if (stripos($rawXml, '<?xml') === false)
                 {
                     throw new Exception($rawXml);
@@ -602,7 +613,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         {
             try
             {
-                $rawXml = current($order->order_custom_fields['_dc_calculation_response']);
+                $rawXml = get_post_meta( $order->id, '_dc_calculation_response', true );
                 if (stripos($rawXml, '<?xml') === false)
                 {
                     throw new Exception($rawXml);
@@ -876,7 +887,7 @@ function dc_deactivate_plugin($when)
 
 function dc_deactivation_notice(){
     $plugin_data = get_plugin_data( __FILE__, false );
-    echo '<div class="updated">
+    echo '<div class="error">
 	        <p><strong> ' .$plugin_data['Name'] . '</strong> requires WooCommerce, and has been deactivated! Please install and activate <strong>WooCommerce Plugin</strong>.
         	</div>';
 }

@@ -5,18 +5,15 @@ add_action('admin_notices', 'dc_woo_admin_warnings');
 
 function dc_woo_admin_warnings()
 {
-    global $woocommerce_dutycalculator_charge, $hook_suffix, $wpdb;
+    global $woocommerce_dutycalculator_charge, $wpdb, $woocommerce;
     /** @var  $woocommerce_dutycalculator_charge WooCommerceDutyCalculatorCharge */
         $warnings = array();
         $isApiKey = false;
-        if($_POST)
+        if($_POST['dc_woo_api_key'])
         {
-            if($_POST['dc_woo_api_key'])
-            {
-                $isApiKey = true;
-            }
+            $isApiKey = true;
         }
-        elseif(get_option('dc_woo_api_key'))
+        elseif((bool)get_option('dc_woo_api_key'))
         {
             $isApiKey = true;
         }
@@ -30,13 +27,20 @@ function dc_woo_admin_warnings()
 					ORDER BY tax_rate_order	");
         if (!count($rates))
         {
-            $warnings['no_dc_tax_rates'] = 'Insert DutyCalculator row to at least one of the tax rate classes <a href="' . admin_url( 'admin.php?page=woocommerce_settings&tab=tax&section=standard' ) . '">here</a>.';
+            if ( version_compare( $woocommerce->version, '2.0.20', '<' ) && null !== $woocommerce->version )
+            {
+                $warnings['no_dc_tax_rates'] = 'Insert DutyCalculator row to at least one of the tax rate classes <a href="' . admin_url( 'admin.php?page=woocommerce_settings&tab=tax&section=standard' ) . '">here</a>.';
+            }
+            else
+            {
+                $warnings['no_dc_tax_rates'] = 'Insert DutyCalculator row to at least one of the tax rate classes <a href="' . admin_url( 'admin.php?page=wc-settings&tab=tax&section=standard' ) . '">here</a>.';
+            }
         }
         $plugin_data = get_plugin_data( $woocommerce_dutycalculator_charge->pluginFilename, false );
 
         if (count($warnings))
         {
-            echo '<div class="updated"><p>You have to perform the following actions to set up <strong>' .$plugin_data['Name'] . '</strong></p><ul style="list-style:disc; margin-left:15px">';
+            echo '<div class="error"><p>You have to perform the following actions to set up <strong>' .$plugin_data['Name'] . '</strong></p><ul style="list-style:disc; margin-left:15px">';
             foreach ($warnings as $warning_type => $message)
             {
                 echo '<li>' . $message . '</li>';

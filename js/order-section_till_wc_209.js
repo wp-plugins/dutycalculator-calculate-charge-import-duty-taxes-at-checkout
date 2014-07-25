@@ -1,13 +1,12 @@
 jQuery( function($){
     $('button.calc_line_taxes').click(function(){
         var canStartAjax = true;
-
         $(document).ajaxStop(function () {
             if (canStartAjax)
             {
                 // Block write panel
                 // if woocommerce version higher than 2.1 -> use 'woocommerce_admin_meta_boxes' instead of 'woocommerce_writepanel_params'
-                $('.woocommerce_order_items_wrapper').block({ message: null, overlayCSS: { background: '#fff url(' + woocommerce_admin_meta_boxes.plugin_url + '/assets/images/ajax-loader.gif) no-repeat center', opacity: 0.6 } });
+                $('.woocommerce_order_items_wrapper').block({ message: null, overlayCSS: { background: '#fff url(' + woocommerce_writepanel_params.plugin_url + '/assets/images/ajax-loader.gif) no-repeat center', opacity: 0.6 } });
 
                 var answer = true;
 
@@ -29,7 +28,7 @@ jQuery( function($){
                         var postcode = $('#_billing_postcode').val();
                         var city = $('#_billing_city').val();
                     } else {
-                        var country = woocommerce_admin_meta_boxes.base_country;
+                        var country = woocommerce_writepanel_params.base_country;
                         var state = '';
                         var postcode = '';
                         var city = '';
@@ -55,34 +54,25 @@ jQuery( function($){
                         calculate_items[ item_id ].quantity = quantity;
                     } );
 
-                    order_shipping = 0;
-
-                    $('#shipping_rows').find('input[type=number], .wc_input_price').each(function(){
-                        cost = $(this).val() || '0';
-                        cost = accounting.unformat( cost, woocommerce_admin.mon_decimal_point );
-                        order_shipping = order_shipping + parseFloat( cost );
-                    });
-
                     var data = {
                         action: 		'dutycalculator_woocommerce_calc_line_taxes',
-                        order_id: 		woocommerce_admin_meta_boxes.post_id,
+                        order_id: 		woocommerce_writepanel_params.post_id,
                         items:			calculate_items,
-                        shipping:		order_shipping,
+                        shipping:		accounting.unformat( $('#_order_shipping').val() ),
                         country:		country,
                         state:			state,
                         postcode:		postcode,
                         city:			city,
-                        security: 		woocommerce_admin_meta_boxes.calc_totals_nonce
+                        security: 		woocommerce_writepanel_params.calc_totals_nonce
                     };
 
-                    $.post( woocommerce_admin_meta_boxes.ajax_url, data, function( response ) {
+                    $.post( woocommerce_writepanel_params.ajax_url, data, function( response ) {
 
                         if ( response ) {
 
                             $items.each( function() {
                                 var $row = $(this);
                                 var item_id = $row.find('input.order_item_id').val();
-                                $row.find('.edit_order_item').click();
 
                                 if ( response['item_taxes'][ item_id ] ) {
                                     $row.find('input.line_tax').val( response['item_taxes'][ item_id ]['line_tax'] ).change();
@@ -98,7 +88,9 @@ jQuery( function($){
                                 }
                             } );
 
-                            $('#tax_rows').find('input').change();
+                            $('#_order_tax').val( response['item_tax'] ).change();
+                            $('#_order_shipping_tax').val( response['shipping_tax'] ).change();
+
                         }
 
                         $('.woocommerce_order_items_wrapper').unblock();
