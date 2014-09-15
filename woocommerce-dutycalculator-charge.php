@@ -3,7 +3,7 @@
 Plugin Name: DutyCalculator: Calculate & charge import duty & taxes at checkout
 Plugin URI: http://www.dutycalculator.com
 Description: Calculate & charge import duty & taxes at checkout to provide your customers with DDP service - requires <a href="http://www.dutycalculator.com">API key</a>
-Version: 1.0.3
+Version: 1.0.4
 Author: DutyCalculator
 Author URI: http://www.dutycalculator.com/team/
 */
@@ -16,11 +16,12 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.3';
+        public $version = '1.0.4';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
         public $failedCalculationCartText = 'Import duty & taxes may be due upon delivery';
+        public $failedCalculationCartTextIncludingTax = 'No';
         public $configPageName = 'woocommerce_dutycalculator_charge_settings';
         public $calculation;
         public $order;
@@ -89,13 +90,24 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
 //            $calcAnswerAttributes = $answer->attributes();
 //            $isCalculationFailed = (bool)(string)$calcAnswerAttributes['failed-calculation'];
                 $isCalculationFailed = ($answer->getName() == 'error');
-                if ($isCalculationFailed)
+                foreach ( $tax_totals as $code => $tax )
                 {
-                    foreach ( $tax_totals as $code => $tax )
+                    if ($tax->label == $this->taxName)
                     {
-                        if ($tax->label == $this->taxName)
+                        if ($isCalculationFailed)
                         {
-                            $tax->formatted_amount = $this->failedCalculationCartText;
+                            if (get_option('woocommerce_tax_display_cart') == 'incl')
+                            {
+                                $tax->formatted_amount = $this->failedCalculationCartTextIncludingTax;
+                            }
+                            else
+                            {
+                                $tax->formatted_amount = $this->failedCalculationCartText;
+                            }
+                        }
+                        elseif ($tax->amount == 0 && get_option('woocommerce_tax_display_cart') == 'incl')
+                        {
+                            $tax->formatted_amount = '';
                         }
                     }
                 }
