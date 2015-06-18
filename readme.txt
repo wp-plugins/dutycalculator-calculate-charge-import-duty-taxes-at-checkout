@@ -2,8 +2,8 @@
 Contributors: DutyCalculator
 Tags:  import duty, DDP shipping, landed cost, import tax, duty calculator, international shipping, charge import duty, checkout
 Requires at least: 3.3
-Tested up to: 3.9.1
-Stable tag: 1.0.4
+Tested up to: 4.2.2
+Stable tag: 1.0.5
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,10 +16,10 @@ This plugin calculates accurate import duty & taxes in the checkout, so you can 
 DutyCalculator API and plugins are used by many brands and retailers that care about their customer experience, such as Christian Louboutin, Selfridges, Threadless, Farfetch and many more.
 
 = Coverage =
-DutyCalculator covers [82 countries](http://www.dutycalculator.com/help_center/what-countries-are-covered-by-the-dutycalculator/) and over [500,000 products](http://www.dutycalculator.com/hs-codes-import-duty-tax-rates-restriction/).
+DutyCalculator covers [141 countries](http://www.dutycalculator.com/help_center/what-countries-are-covered-by-the-dutycalculator/) and over [500,000 products](http://www.dutycalculator.com/hs-codes-import-duty-tax-rates-restriction/).
 
 = Requirements =
-The plugin requires a DutyCalculator [API account](http://www.dutycalculator.com/compare-plans/) and is made to work with WooCommerce version 2.1.10 and higher.
+The plugin requires a DutyCalculator [API account](http://www.dutycalculator.com/compare-plans/) and is made to work with WooCommerce version 2.3.10 and higher.
 
 == Installation ==
 The Plugin can be installed directly from the main WordPress Plugin page.
@@ -52,6 +52,9 @@ To contact tech support go to http://www.dutycalculator.com/team/. Make sure to 
 6. Backend: Extension provisioning
 
 == Changelog ==
+
+= 1.0.5 =
+* Adaptation to WooCommerce 2.3.10
 
 = 1.0.4 =
 * Display prices during cart/checkout: Including tax. Adapted cart/checkout message in case of calculation failed.

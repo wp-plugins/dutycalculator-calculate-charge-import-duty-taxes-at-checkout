@@ -3,7 +3,7 @@
 Plugin Name: DutyCalculator: Calculate & charge import duty & taxes at checkout
 Plugin URI: http://www.dutycalculator.com
 Description: Calculate & charge import duty & taxes at checkout to provide your customers with DDP service - requires <a href="http://www.dutycalculator.com">API key</a>
-Version: 1.0.4
+Version: 1.0.5
 Author: DutyCalculator
 Author URI: http://www.dutycalculator.com/team/
 */
@@ -16,7 +16,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.4';
+        public $version = '1.0.5';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
@@ -32,7 +32,6 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
         public $api;
 
         public function __construct() {
-
             // called just before the woocommerce template functions are included
             add_action( 'init', array( $this, 'init' ), 0 );
 //            add_action( 'init', array( $this, 'include_template_functions' ), 20 );
@@ -71,6 +70,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
             add_action('save_post_product', array($this, 'add_dc_post_meta')); //save dc widget data
             add_filter('woocommerce_cart_tax_totals', array($this, 'change_taxes_if_failed_calculation'), 1, 2);
             add_filter('woocommerce_order_tax_totals', array($this, 'change_taxes_if_failed_calculation'), 1, 2);
+            add_action('woocommerce_saved_order_items', array($this, 'order_items_saved'), 1, 2);
 
             // Loaded action
             do_action( 'woocommerce_dutycalculator_charge_loaded' );
@@ -122,9 +122,272 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
             add_post_meta($order->id, '_dc_api_requests', $this->api->requestUri); // just in case
         }
 
+        public function order_items_saved($order_id, $items)
+        {
+            global $woocommerce;
+            if ( version_compare( $woocommerce->version, '2.3.10', '>' ) && null !== $woocommerce->version ) {
+
+                if (defined('DOING_AJAX') && DOING_AJAX) {
+                    global $wpdb;
+                    global $woocommerce;
+
+                    // Order items + fees
+                    $subtotal = 0;
+                    $total = 0;
+                    $subtotal_tax = 0;
+                    $total_tax = 0;
+                    $taxes = array('items' => array(), 'shipping' => array());
+
+                    $DcItems = array();
+
+                    $order = wc_get_order($order_id);
+
+                    if (sizeof($items) > 0) {
+                        $sendApiRequest = false;
+                        $requestParams = array();
+                        $requestParams['cat'] = array();
+                        $requestParams['desc'] = array();
+                        $requestParams['qty'] = array();
+                        $requestParams['value'] = array();
+                        $requestParams['reference'] = array();
+                        $requestParams['weight'] = array();
+                        $requestParams['weight_unit'] = array();
+
+                        foreach ($items['order_item_id'] as $item_id) {
+
+                            $item_id = absint($item_id);
+                            $tax_class = esc_attr($items['order_item_tax_class'][$item_id]);
+                            $product_id = $order->get_item_meta($item_id, '_product_id', true);
+
+                            if (!$item_id || $tax_class == '0')
+                                continue;
+
+                            // Get product details
+                            if (get_post_type($product_id) == 'product') {
+                                $_product = get_product($product_id);
+//                        $items[$item_id]['order_item_id'] = $item_id;
+                                $DcItems[$item_id]['product_id'] = $product_id;
+                                $item_tax_status = $_product->get_tax_status();
+                            } else {
+                                $item_tax_status = 'taxable';
+                            }
+                            // Only calc if taxable
+                            if ($item_tax_status == 'taxable') {
+
+                                if ($this->is_dc_settings_country($order->shipping_country)) {
+                                    $dcTax = $this->get_dc_tax_by_class($items['order_item_tax_class'][$item_id]);
+                                    if ($dcTax) {
+                                        $DcItems[$item_id]['dc_tax_id'] = $dcTax->tax_rate_id;
+                                        $sendApiRequest = true;
+                                    }
+                                }
+
+                                // collecting item data for api request
+                                if ($DcItems[$item_id]['dc_tax_id']) {
+                                    $idx = (string)$product_id; // do not use more than one identical products in order (just increase its quantity)
+                                    $product = $_product;
+                                    /** @var $product WC_Product */
+                                    $requestParams['cat'][$idx] = $product->dc_duty_category_id ? $product->dc_duty_category_id : '';
+                                    $requestParams['desc'][$idx] = $product->get_title();
+                                    $requestParams['qty'][$idx] = $items['order_item_qty'][$item_id];
+                                    $requestParams['value'][$idx] = ($items['line_total'][$item_id] / $items['order_item_qty'][$item_id]);
+                                    $requestParams['reference'][$idx] = $idx;
+                                    $requestParams['weight'][$idx] = $product->get_weight() ? $product->get_weight() : 0;
+                                    $requestParams['weight_unit'][$idx] = get_option('woocommerce_weight_unit') ? get_option('woocommerce_weight_unit') : 'lb';
+                                }
+                            }
+                        }
+
+                        if ($sendApiRequest) {
+                            // api request
+                            $countryFrom = get_option('woocommerce_default_country');
+                            $countryTo = $order->shipping_country;
+                            $state = $order->shipping_state;
+                            $currency = get_option('woocommerce_currency');
+                            $shipping = $order->order_shipping;
+                            $requestParams['from'] = substr($countryFrom, 0, 2);
+                            $requestParams['to'] = $countryTo;
+                            if ($state) {
+                                $requestParams['province'] = $state;
+                            }
+                            $requestParams['classify_by'] = 'cat desc';
+                            $requestParams['insurance'] = 0;
+                            $requestParams['currency'] = $currency;
+                            $requestParams['output_currency'] = $currency;
+                            $requestParams['shipping'] = $shipping;
+                            $requestParams['commercial_importer'] = '';
+                            $requestParams['imported_wt'] = 0;
+                            $requestParams['imported_value'] = 0;
+                            $requestParams['detailed_result'] = 1;
+                            $requestParams['save_failed'] = $this->isSaveFailed;
+                            $requestParams['use_defaults'] = 1;
+
+                            $dcApi = $this->api->send_request_and_get_response($this->api->actionCalculation, $requestParams);
+                            $rawXml = $dcApi->response;
+
+                            $this->calculation = new WooCommerceDutyCalculatorApiCalculation($rawXml);
+                            $this->dc_woo_calculation_response_to_order_meta($order_id); // setting new calculation response to order data
+                            $this->store_api_request_to_order($order);
+
+                            try {
+                                if (stripos($rawXml, '<?xml') === false) {
+                                    throw new Exception($rawXml);
+                                }
+                                $answer = new SimpleXMLElement($rawXml);
+                                $isCalculationError = ($answer->getName() == 'error' ? true : false);
+
+                                if ($isCalculationError) {
+                                    $linkToCalculation = '<span style="color:#FF0000">Unable to calculate import duty & taxes!</br>' . (string)$answer->message . ' (Error code: ' . (string)$answer->code . ')</span>';
+                                } else {
+                                    $calcAnswerAttributes = $answer->attributes();
+                                    $linkToCalculation = '<a target="_blank" href="' . $this->api->dutyCalculatorApiHost . '/' . $this->api->dutyCalculatorSavedCalculationUrl . $calcAnswerAttributes['id'] . '/">Import duty & tax calculation</a>'; //redrawing calculation URL
+                                    $this->save_dc_calculation_for_order($order); // save calculation
+                                    $this->store_api_request_to_order($order);
+                                }
+
+                                $responseItems = $answer->xpath('item');
+                                foreach ($responseItems as $responseItem) {
+                                    $responseItemAttributes = $responseItem->attributes();
+                                    $productIdFromResponse = (string)$responseItemAttributes['reference'];
+                                    foreach ($items['order_item_id'] as $item_id) {
+                                        if ($productIdFromResponse == $DcItems[$item_id]['product_id']) { // update ORDER items to dc taxes
+                                            $responseItemTax = (float)$responseItem->total->amount;
+
+                                            $items['line_subtotal_tax'][$item_id][$DcItems[$item_id]['dc_tax_id']] = $responseItemTax; // important
+                                            $items['line_tax'][$item_id][$DcItems[$item_id]['dc_tax_id']] = $responseItemTax; // important
+
+                                            //   $taxes[$item['dc_tax_id']] += $responseItemTax; // important
+                                            //  $item_tax += $responseItemTax; // important
+                                        }
+                                    }
+                                }
+                            } catch (Exception $e) {
+                            }
+                        }
+                    }
+
+                    if (isset($items['order_item_id'])) {
+                        $line_total = $line_subtotal = $line_tax = $line_subtotal_tax = array();
+
+                        foreach ($items['order_item_id'] as $item_id) {
+
+                            $item_id = absint($item_id);
+
+                            if (isset($items['order_item_name'][$item_id])) {
+                                $wpdb->update(
+                                    $wpdb->prefix . 'woocommerce_order_items',
+                                    array('order_item_name' => wc_clean($items['order_item_name'][$item_id])),
+                                    array('order_item_id' => $item_id),
+                                    array('%s'),
+                                    array('%d')
+                                );
+                            }
+
+
+                            // Get values. Subtotals might not exist, in which case copy value from total field
+                            $line_total[$item_id] = isset($items['line_total'][$item_id]) ? $items['line_total'][$item_id] : 0;
+                            $line_subtotal[$item_id] = isset($items['line_subtotal'][$item_id]) ? $items['line_subtotal'][$item_id] : $line_total[$item_id];
+                            $line_tax[$item_id] = isset($items['line_tax'][$item_id]) ? $items['line_tax'][$item_id] : array();
+                            $line_subtotal_tax[$item_id] = isset($items['line_subtotal_tax'][$item_id]) ? $items['line_subtotal_tax'][$item_id] : $line_tax[$item_id];
+
+                            // Format taxes
+                            $line_taxes = array_map('wc_format_decimal', $line_tax[$item_id]);
+                            $line_subtotal_taxes = array_map('wc_format_decimal', $line_subtotal_tax[$item_id]);
+
+                            // Update values
+                            wc_update_order_item_meta($item_id, '_line_subtotal', wc_format_decimal($line_subtotal[$item_id]));
+                            wc_update_order_item_meta($item_id, '_line_total', wc_format_decimal($line_total[$item_id]));
+                            wc_update_order_item_meta($item_id, '_line_subtotal_tax', array_sum($line_subtotal_taxes));
+                            wc_update_order_item_meta($item_id, '_line_tax', array_sum($line_taxes));
+
+                            // Save line tax data - Since 2.2
+                            wc_update_order_item_meta($item_id, '_line_tax_data', array('total' => $line_taxes, 'subtotal' => $line_subtotal_taxes));
+                            $taxes['items'][] = $line_taxes;
+
+                            // Total up
+                            $subtotal += wc_format_decimal($line_subtotal[$item_id]);
+                            $total += wc_format_decimal($line_total[$item_id]);
+                            $subtotal_tax += array_sum($line_subtotal_taxes);
+                            $total_tax += array_sum($line_taxes);
+
+                            // Clear meta cache
+                            wp_cache_delete($item_id, 'order_item_meta');
+                        }
+                    }
+
+                    // Taxes
+                    $order_taxes = isset($items['order_taxes']) ? $items['order_taxes'] : array();
+                    $taxes_items = array();
+                    $taxes_shipping = array();
+                    $total_tax = 0;
+                    $total_shipping_tax = 0;
+
+                    // Sum items taxes
+                    foreach ($taxes['items'] as $rates) {
+
+                        foreach ($rates as $id => $value) {
+
+                            if (isset($taxes_items[$id])) {
+                                $taxes_items[$id] += $value;
+                            } else {
+                                $taxes_items[$id] = $value;
+                            }
+                        }
+                    }
+
+                    // Update order taxes
+                    foreach ($order_taxes as $item_id => $rate_id) {
+
+                        if (isset($taxes_items[$rate_id])) {
+                            $_total = wc_format_decimal($taxes_items[$rate_id]);
+                            wc_update_order_item_meta($item_id, 'tax_amount', $_total);
+
+                            $total_tax += $_total;
+                        }
+
+                        if (isset($taxes_shipping[$rate_id])) {
+                            $_total = wc_format_decimal($taxes_shipping[$rate_id]);
+                            wc_update_order_item_meta($item_id, 'shipping_tax_amount', $_total);
+
+                            $total_shipping_tax += $_total;
+                        }
+                    }
+
+                    // Update totals
+                    update_post_meta($order_id, '_order_total', wc_format_decimal($items['_order_total']));
+
+                    // Update tax
+                    update_post_meta($order_id, '_order_tax', wc_format_decimal($total_tax));
+
+                    // Update version after saving
+                    update_post_meta($order_id, '_order_version', WC_VERSION);
+                }
+            }
+
+        }
+
         public function get_order_from_new_order_item($itemId, $item, $orderId)
         {
+            global $woocommerce;
             $this->order = new WC_Order($orderId);
+
+            if (version_compare( $woocommerce->version, '2.3.10', '>' ) && null !== $woocommerce->version) {
+
+                if ($item['order_item_type'] == 'tax') {
+                    $items = $this->order->get_items();
+
+                    foreach ($items as $iId => $i) {
+                        $lineTaxData = unserialize($i['line_tax_data']);
+
+                        $taxId = key($lineTaxData['total']);
+
+                        $lineTaxData['total'][$taxId] = $i['line_tax'];
+                        $lineTaxData['subtotal'][$taxId] = $i['line_subtotal_tax'];
+
+                        wc_update_order_item_meta($iId, '_line_tax_data', array('total' => $lineTaxData['total'], 'subtotal' => $lineTaxData['subtotal']));
+                    }
+                }
+            }
         }
 
         public function add_order_item_hs_code_meta_ajax($itemId, $item)
@@ -158,10 +421,18 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                     throw new Exception($rawXml);
                 }
                 $answer = new SimpleXMLElement($rawXml);
-                $node = current($answer->xpath('classification'));
-                $hsCode = (string)current($node->xpath('hs-code'));
-                woocommerce_add_order_item_meta($itemId, 'HS code destination country', $hsCode);
-                $this->store_api_request_to_order($order);
+                if ($answer->getName() == 'error')
+                {
+                    $errorMessage = (string)$answer->message . ' (Error code: ' . (string)$answer->code . ')';
+                    echo "<script>alert('" . $errorMessage . "')</script>";
+                }
+                else
+                {
+                    $node = current($answer->xpath('classification'));
+                    $hsCode = (string)current($node->xpath('hs-code'));
+                    woocommerce_add_order_item_meta($itemId, 'HS code destination country', $hsCode);
+                    $this->store_api_request_to_order($order);
+                }
             }
             catch (Exception $e)
             {}
@@ -186,6 +457,8 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
             $items          = isset( $_POST['items'] ) ? $_POST['items'] : array();
             $shipping		= $_POST['shipping'];
             $item_tax		= 0;
+            parse_str( $_POST['serializedItems'], $serializedItems );
+
 
             // Calculate sales tax first
             if ( sizeof( $items ) > 0 )
@@ -344,8 +617,10 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                                 if ($productIdFromResponse == $item['product_id'])
                                 { // update ORDER items to dc taxes
                                     $responseItemTax = (float)$responseItem->total->amount;
-                                    $item_taxes[$idItem]['line_subtotal_tax'] += $responseItemTax; // important
-                                    $item_taxes[$idItem]['line_tax'] += $responseItemTax; // important
+                                    $serializedItems['line_subtotal_tax'][$idItem][$item['dc_tax_id']] = $item_taxes[$idItem]['line_subtotal_tax'] += $responseItemTax; // important
+                                    $serializedItems['line_tax'][$idItem][$item['dc_tax_id']] = $item_taxes[$idItem]['line_tax'] += $responseItemTax; // important
+                                    $item_taxes[$idItem]['lineTaxHtml'] = wc_price( wc_round_tax_total( $item_taxes[$idItem]['line_tax'] ), array( 'currency' => $order->get_order_currency() ) );
+
                                     $taxes[$item['dc_tax_id']] += $responseItemTax; // important
                                     $item_tax += $responseItemTax; // important
                                 }
@@ -418,6 +693,8 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                     $item['label'] = WC()->countries->tax_or_vat();
                 }
 
+
+
                 // Add line item
                 $item_id = wc_add_order_item( $order_id, array(
                     'order_item_name' => $item['name'],
@@ -436,14 +713,23 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                 include( WC()->plugin_path() . '/includes/admin/post-types/meta-boxes/views/html-order-tax.php' );
             }
 
+            wc_save_order_items( $order_id, $serializedItems );
+
+            $order = wc_get_order( $order_id );
+
+            $taxes = wc_price( wc_round_tax_total( $item_tax ), array( 'currency' => $order->get_order_currency() ) );
+
             $tax_row_html = ob_get_clean();
 
             // Return
             echo json_encode( array(
                 'item_tax'     => $item_tax,
+                'itemTaxHtml' => wc_price( wc_round_tax_total( $item_tax ), array( 'currency' => $order->get_order_currency() ) ),
                 'item_taxes'   => $item_taxes,
                 'shipping_tax' => $shipping_tax,
                 'tax_row_html' => $tax_row_html,
+                'order_total' => $serializedItems['_order_total'],
+                'currency' => get_woocommerce_currency_symbol($order->get_order_currency()),
                 'link_to_calculation' => $linkToCalculation
             ) );
 
@@ -584,7 +870,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                 wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section_till_wc_209.js', array('jquery'), $this->version);
                 wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section_till_wc_209.js', array('jquery'), $this->version);
             }
-            else
+            elseif (version_compare( $woocommerce->version, '2.3.10', '<' ) && null !== $woocommerce->version)
             {
                 wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
                 wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
@@ -917,7 +1203,7 @@ function woo_admin_tax_rates_settings_page()
 
 function dc_woo_admin_settings_tax()
 {
-    global $woocommerce_dutycalculator_charge;
+    global $woocommerce_dutycalculator_charge, $woocommerce;
     /** @var $woocommerce_dutycalculator_charge WooCommerceDutyCalculatorCharge */
     ?>
     <script>
@@ -955,36 +1241,46 @@ function dc_woo_admin_settings_tax()
         jQuery('.insert_dc').click(function() {
             var $tbody = jQuery('.wc_tax_rates').find('tbody');
             var size = $tbody.find('tr').size();
+            var itemSymbol = '][';
+
+            <?php if (version_compare( $woocommerce->version, '2.0.20', '<' ) && null !== $woocommerce->version) { ?>
+                itemSymbol = '][';
+            <?php } elseif (version_compare( $woocommerce->version, '2.3.10', '>' ) && null !== $woocommerce->version) { ?>
+                itemSymbol = '-';
+            <?php }  ?>
+
+
             var code = '<tr class="new">\
-						<td class="sort">&nbsp;</td>\
-						<td class="country" width="8%">\
-							<input type="text" placeholder="*" readonly="readonly" name="tax_rate_country[new][' + size + ']" />\
-						</td>\
-						<td class="state" width="8%">\
-							<input type="text" placeholder="*" readonly="readonly" name="tax_rate_state[new][' + size + ']" />\
-						</td>\
-						<td class="postcode">\
-							<input type="text" placeholder="*" readonly="readonly" name="tax_rate_postcode[new][' + size + ']" />\
-						</td>\
-						<td class="city">\
-							<input type="text" placeholder="*" readonly="readonly" name="tax_rate_city[new][' + size + ']" />\
-						</td>\
-						<td class="rate" width="8%">\
-							<input type="number" style="color:#949494" step="any" value="automatic" readonly="readonly" name="tax_rate[new][' + size + ']" />\
-						</td>\
-						<td class="name" width="8%">\
-							<input type="text" style="color:#949494" value="<?php echo $woocommerce_dutycalculator_charge->taxName ?>" readonly="readonly" name="tax_rate_name[new][' + size + ']" />\
-						</td>\
-						<td class="priority" width="8%">\
-							<input type="number" step="1" min="1" value="1" name="tax_rate_priority[new][' + size + ']" />\
-						</td>\
-						<td class="compound" width="8%">\
-	    					<span>not applied</span>\
-	    				</td>\
-	    				<td class="apply_to_shipping" width="8%">\
-	    					<input type="checkbox" class="checkbox" checked="checked" onclick="return false" name="tax_rate_shipping[new][' + size + ']" checked="checked" />\
-	    				</td>\
-					</tr>';
+                            <td class="sort">&nbsp;</td>\
+                            <td class="country" width="8%">\
+                                <input type="text" placeholder="*" readonly="readonly" name="tax_rate_country[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="state" width="8%">\
+                                <input type="text" placeholder="*" readonly="readonly" name="tax_rate_state[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="postcode">\
+                                <input type="text" placeholder="*" readonly="readonly" name="tax_rate_postcode[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="city">\
+                                <input type="text" placeholder="*" readonly="readonly" name="tax_rate_city[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="rate" width="8%">\
+                                <input type="number" style="color:#949494" step="any" value="automatic" readonly="readonly" name="tax_rate[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="name" width="8%">\
+                                <input type="text" style="color:#949494" value="<?php echo $woocommerce_dutycalculator_charge->taxName ?>" readonly="readonly" name="tax_rate_name[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="priority" width="8%">\
+                                <input type="number" step="1" min="1" value="1" name="tax_rate_priority[new' + itemSymbol + size + ']" />\
+                            </td>\
+                            <td class="compound" width="8%">\
+                                <span>not applied</span>\
+                            </td>\
+                            <td class="apply_to_shipping" width="8%">\
+                                <input type="checkbox" class="checkbox" checked="checked" onclick="return false" name="tax_rate_shipping[new' + itemSymbol + size + ']" checked="checked" />\
+                            </td>\
+                        </tr>';
+
 
             if ( $tbody.find('tr.current').size() > 0 ) {
                 $tbody.find('tr.current').after( code );
