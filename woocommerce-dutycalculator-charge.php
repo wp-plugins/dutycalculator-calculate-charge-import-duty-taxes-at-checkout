@@ -399,43 +399,42 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                 return;
             }
             $order = $this->order;
-            $params = array();
-            $params['to'] = $order->shipping_country;
-            if ($order->shipping_state)
+
+            if ($order->shipping_country)
             {
-                $params['province'] = $order->shipping_state;
+                $params = array();
+                $params['to'] = $order->shipping_country;
+                if ($order->shipping_state)
+                {
+                    $params['province'] = $order->shipping_state;
+                }
+                $params['classify_by'] = 'cat desc';
+                $params['detailed_result'] = 1;
+                $params['cat'] = array();
+                $params['desc'] = array();
+                $idx = $item['product_id'];
+                $params['cat'][$idx] = $product->dc_duty_category_id;
+                $params['desc'][$idx] = $item['name'];
+                $dcApi = $this->api->send_request_and_get_response($this->api->actionGetHsCode, $params);
+                try
+                {
+                    $rawXml = $dcApi->response;
+                    if (stripos($rawXml, '<?xml') === false)
+                    {
+                        throw new Exception($rawXml);
+                    }
+                    $answer = new SimpleXMLElement($rawXml);
+                    if ($answer->getName() != 'error')
+                    {
+                        $node = current($answer->xpath('classification'));
+                        $hsCode = (string)current($node->xpath('hs-code'));
+                        wc_add_order_item_meta($itemId, 'HS code destination country', $hsCode);
+                        $this->store_api_request_to_order($order);
+                    }
+                }
+                catch (Exception $e)
+                {}
             }
-            $params['classify_by'] = 'cat desc';
-            $params['detailed_result'] = 1;
-            $params['cat'] = array();
-            $params['desc'] = array();
-            $idx = $item['product_id'];
-            $params['cat'][$idx] = $product->dc_duty_category_id;
-            $params['desc'][$idx] = $item['name'];
-            $dcApi = $this->api->send_request_and_get_response($this->api->actionGetHsCode, $params);
-            try
-            {
-                $rawXml = $dcApi->response;
-                if (stripos($rawXml, '<?xml') === false)
-                {
-                    throw new Exception($rawXml);
-                }
-                $answer = new SimpleXMLElement($rawXml);
-                if ($answer->getName() == 'error')
-                {
-                    $errorMessage = (string)$answer->message . ' (Error code: ' . (string)$answer->code . ')';
-                    echo "<script>alert('" . $errorMessage . "')</script>";
-                }
-                else
-                {
-                    $node = current($answer->xpath('classification'));
-                    $hsCode = (string)current($node->xpath('hs-code'));
-                    woocommerce_add_order_item_meta($itemId, 'HS code destination country', $hsCode);
-                    $this->store_api_request_to_order($order);
-                }
-            }
-            catch (Exception $e)
-            {}
         }
 
         public function dc_woo_calc_line_taxes_ajax_response()
