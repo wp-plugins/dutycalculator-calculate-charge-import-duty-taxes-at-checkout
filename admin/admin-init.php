@@ -102,9 +102,14 @@ function dc_woo_settings_fields()
 function dc_woo_settings_process($options)
 {
     global $woocommerce;
-    $suffix = defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
-    wp_register_script( 'chosen', $woocommerce->plugin_url() . '/assets/js/chosen/chosen.jquery'.$suffix.'.js', array('jquery'), $woocommerce->version );
-    wp_enqueue_style( 'dc_chosen_styles', $woocommerce->plugin_url() . '/assets/css/chosen.css' );
+
+    $assets_path          = str_replace( array( 'http:', 'https:' ), '', $woocommerce->plugin_url() ) . '/assets/';
+    $suffix               = defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
+
+    wp_register_script( 'select2', $assets_path . 'js/select2/select2' . $suffix . '.js', array( 'jquery' ), '3.5.2' );
+    wp_enqueue_style( 'select2', $assets_path . 'css/select2.css' );
+    wp_enqueue_script( 'select2' );
+
     wp_enqueue_style( 'woocommerce_admin_styles', $woocommerce->plugin_url() . '/assets/css/admin.css' );
 
     if (!empty( $_POST['dc_save_settings']))
@@ -136,9 +141,6 @@ function dc_woo_settings_process($options)
     <table class="form-table">
     <tbody>
         <?php
-        wp_register_script( 'chosen', $woocommerce->plugin_url() . '/assets/js/chosen/chosen.jquery'.$suffix.'.js', array('jquery'), $woocommerce->version );
-        wp_enqueue_script( 'ajax-chosen' );
-        wp_enqueue_script( 'chosen' );
 
     foreach ($options as $value)
     {
@@ -296,7 +298,7 @@ function dc_woo_settings_process($options)
                     <?php //echo $tip; ?>
                 </th>
                 <td class="forminp">
-                    <select multiple="multiple" name="<?php echo esc_attr( $value['id'] ); ?>[]" style="width:450px;" data-placeholder="<?php _e( 'Choose countries&hellip;', 'woocommerce' ); ?>" title="Country" class="chosen_select">
+                    <select multiple="multiple" name="<?php echo esc_attr( $value['id'] ); ?>[]" style="width:450px;" data-placeholder="<?php _e( 'Choose countries&hellip;', 'woocommerce' ); ?>" title="Country" class="wc-enhanced-select">
                         <?php
                         if ( $countries )
                             foreach ( $countries as $key => $val )
@@ -323,6 +325,8 @@ function dc_woo_settings_process($options)
     <script type="text/javascript">
         jQuery(window).load(function(){
 
+            jQuery('.wc-enhanced-select').select2();
+
             // Countries
             jQuery('select#dc_woo_allowed_countries').change(function(){
                 if (jQuery(this).val()=="specific") {
@@ -331,13 +335,6 @@ function dc_woo_settings_process($options)
                     jQuery(this).parent().parent().next('tr').hide();
                 }
             }).change();
-
-            // Chosen selects
-            jQuery("select.chosen_select").chosen();
-
-            jQuery("select.chosen_select_nostd").chosen({
-                allow_single_deselect: 'true'
-            });
         });
     </script>
 <?php

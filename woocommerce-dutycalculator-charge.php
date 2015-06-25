@@ -874,6 +874,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                 wp_register_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
                 wp_enqueue_script('dc_woo_order_calc_taxes', $this->plugin_url() . '/js/order-section.js', array('jquery'), $this->version);
             }
+
         }
 
         public function dc_woo_calculation_response_to_order_meta($orderId, $posted = false)
