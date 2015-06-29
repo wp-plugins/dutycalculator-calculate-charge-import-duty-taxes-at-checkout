@@ -783,7 +783,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
                     $dcTax = null;
                     $product = $cartItem['data']; /** @var $product WC_Product */
                     $dcTax = $this->get_dc_tax_by_class($product->get_tax_class());
-                    if (!$dcTax)
+                    if (!$dcTax || $product->get_tax_status() == 'none')
                     {
                         continue;
                     }
