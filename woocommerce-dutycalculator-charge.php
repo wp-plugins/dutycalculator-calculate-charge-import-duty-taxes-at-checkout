@@ -3,7 +3,7 @@
 Plugin Name: DutyCalculator: Calculate & charge import duty & taxes at checkout
 Plugin URI: http://www.dutycalculator.com
 Description: Calculate & charge import duty & taxes at checkout to provide your customers with DDP service - requires <a href="http://www.dutycalculator.com">API key</a>
-Version: 1.0.5
+Version: 1.0.6
 Author: DutyCalculator
 Author URI: http://www.dutycalculator.com/team/
 */
@@ -16,7 +16,7 @@ if (!class_exists('WooCommerceDutyCalculatorCharge'))
      */
     class WooCommerceDutyCalculatorCharge
     {
-        public $version = '1.0.5';
+        public $version = '1.0.6';
         public $pluginFilename = __FILE__;
         public $taxName = 'Import Duty & Taxes';
         public $isSaveFailed = '0';
